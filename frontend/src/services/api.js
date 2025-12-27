@@ -1,4 +1,5 @@
-const API_BASE = "http://localhost:3000";
+import dotenv from "dotenv";
+const API_BASE = process.env.API_BASE;
 import axios from 'axios';
 
 export async function fetchCarbonIntensity(selectedZones) {
