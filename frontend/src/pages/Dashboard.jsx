@@ -13,9 +13,12 @@ import InfoPanel from "../components/Dashboard/InfoPanel";
 import PhaseDisclaimer from "../components/Dashboard/PhaseDisclaimer";
 
 // Services & Data Logic
-import { fetchCarbonIntensity } from "../services/api"; // The fixed Promise.all version
+import { fetchCarbonIntensity } from "../services/api"; 
+import { measureLatency } from "../services/latencyService"; // <--- 1. NEW IMPORT
+import { getPingUrl } from "../utils/urlGenerator";          // <--- 2. CORRECTED IMPORT NAME
+
 import {
-  generateCloudRegions,    // The new factory function
+  generateCloudRegions,
   selectOptimalRegion,
   calculateCarbonSavings,
 } from "../data/regionData";
@@ -24,15 +27,14 @@ function Dashboard() {
   // --- STATE MANAGEMENT ---
   const [taskType, setTaskType] = useState("green");
   const [selectedProvider, setSelectedProvider] = useState("");
-  const [selectedZone, setSelectedZone] = useState([]); // Array of strings e.g. ["us-east-1"]
+  const [selectedZone, setSelectedZone] = useState([]); 
   const [applicationUrl, setApplicationUrl] = useState("");
   const [manualSelection, setManualSelection] = useState(null);
 
-  // This state holds the full Region Objects (Metadata + Live Carbon Data)
   const [regionData, setRegionData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // --- EFFECT: Fetch & Generate Data ---
+  // --- EFFECT: Fetch & Generate Data (PARALLEL MODE) ---
   useEffect(() => {
     const loadData = async () => {
       // 1. If no zones are selected, clear the dashboard
@@ -44,13 +46,46 @@ function Dashboard() {
 
       setLoading(true);
       try {
-        // 2. Fetch RAW data from backend: [{ regionCode: "us-east-1", carbonIntensity: 454 }]
-        const rawBackendData = await fetchCarbonIntensity(selectedZone);
+        // --- STEP 2: PREPARE TASKS ---
         
-        // 3. Convert raw data into Rich UI Objects using your Factory
-        const formattedRegions = generateCloudRegions(rawBackendData);
+        // Task A: Ask Backend for Carbon Data
+        const carbonPromise = fetchCarbonIntensity(selectedZone);
+
+        // Task B: Ask Browser to Ping AWS Regions (Client-Side)
+        const latencyPromises = selectedZone.map(async (zoneCode) => {
+           // We generate the URL dynamically using your renamed Utility
+           const url = getPingUrl(zoneCode); // <--- 3. CORRECTED FUNCTION CALL
+           
+           // If we have a URL, measure it. If not, return default high latency.
+           const latency = url ? await measureLatency(url) : 0;
+           
+           return { id: zoneCode, latency };
+        });
+
+        // --- STEP 3: FIRE PARALLEL REQUESTS ---
+        const [carbonResults, latencyResults] = await Promise.all([
+          carbonPromise,
+          Promise.all(latencyPromises)
+        ]);
+
+        // --- STEP 4: MERGE DATA ---
+        const mergedData = carbonResults.map((carbonItem) => {
+          // Find the matching latency result
+          const matchingLatency = latencyResults.find(l => l.id === carbonItem.regionCode);
+          
+          return {
+            ...carbonItem, // Contains: regionCode, carbonIntensity
+            estimatedLatency: matchingLatency ? matchingLatency.latency : 0,
+            provider: "AWS" 
+          };
+        });
+        
+        // --- STEP 5: GENERATE RICH UI OBJECTS ---
+        // Ensure generateCloudRegions inside regionData.js uses 'estimatedLatency'
+        const formattedRegions = generateCloudRegions(mergedData);
         
         setRegionData(formattedRegions);
+
       } catch (error) {
         console.error("Failed to load region data", error);
       } finally {
@@ -59,22 +94,15 @@ function Dashboard() {
     };
 
     loadData();
-  }, [selectedZone]); // Re-run whenever user adds/removes a zone
+  }, [selectedZone]); 
 
   // --- DERIVED STATE (Filtering) ---
-  
-  // Even though we fetched specific zones, the user might still want to filter 
-  // the results by Provider (e.g., Show me only AWS results from my selection)
   const filteredRegions = regionData.filter((region) => {
     return selectedProvider ? region.provider === selectedProvider : true;
   });
 
-  // Calculate Optimal Region & Savings based on the LIVE data
   const optimalRegion = selectOptimalRegion(filteredRegions, taskType);
-  
-  // Final selection is either what the user clicked manually, or the auto-recommendation
   const activeSelection = manualSelection || optimalRegion;
-  
   const carbonSavings = calculateCarbonSavings(activeSelection, filteredRegions);
 
   // --- UI RENDER ---
@@ -91,7 +119,7 @@ function Dashboard() {
             value={taskType}
             onChange={(val) => {
               setTaskType(val);
-              setManualSelection(null); // Reset manual override if strategy changes
+              setManualSelection(null);
             }}
           />
           <CloudProviderSelector
@@ -101,11 +129,6 @@ function Dashboard() {
               setManualSelection(null);
             }}
           />
-          
-          {/* NOTE: This component is now "Dumb". 
-             It just updates 'selectedZone' state. 
-             The useEffect above handles the fetching.
-          */}
           <AvailabilityZoneSelector
             value={selectedZone}
             onChange={(val) => {
@@ -113,19 +136,19 @@ function Dashboard() {
               setManualSelection(null);
             }}
           />
-          
           <ApplicationUrlInput
             value={applicationUrl}
             onChange={setApplicationUrl}
           />
         </div>
 
-        {/* Content Area: Show loading or Data */}
+        {/* Content Area */}
         {loading ? (
-           <div className="text-center py-20 text-gray-500">Fetching live carbon data...</div>
+           <div className="text-center py-20 text-gray-500 flex flex-col items-center gap-2">
+             <span>Measuring Carbon & Network Latency...</span>
+           </div>
         ) : filteredRegions.length > 0 ? (
           <>
-            {/* Main Decision + Chart */}
             <div className="grid lg:grid-cols-3 gap-8">
               <div className="lg:col-span-1">
                 <RoutingDecisionCard
@@ -143,7 +166,6 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Region Comparison Cards */}
             <section>
               <h2 className="text-xl font-semibold mb-4 flex items-center gap-3">
                 <span className="w-1.5 h-6 rounded-full bg-primary" />
@@ -166,14 +188,12 @@ function Dashboard() {
             </section>
           </>
         ) : (
-          /* Empty State */
           <div className="text-center py-20 bg-gray-50 rounded-xl border border-dashed border-gray-300">
             <h3 className="text-lg font-medium text-gray-600">No Regions Selected</h3>
             <p className="text-gray-500">Select an Availability Zone to see live carbon data.</p>
           </div>
         )}
 
-        {/* Footer Info */}
         <InfoPanel />
         <PhaseDisclaimer />
       </div>
