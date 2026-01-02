@@ -117,12 +117,12 @@ export const AWS_REGIONS = [
     zone: "Middle East",
     pue: 1.15,
   },
-  {
+  /*{
     id: "me-south-1",
     name: "Middle East (Bahrain)",
     zone: "Middle East",
     pue: 1.15,
-  },
+  },*/
   {
     id: "me-central-1",
     name: "Middle East (UAE)",
@@ -151,12 +151,12 @@ export const AWS_REGIONS = [
     zone: "Asia Pacific",
     pue: 1.15,
   },
-  {
+  /*{
     id: "ap-southeast-1",
     name: "Asia Pacific (Singapore)",
     zone: "Asia Pacific",
     pue: 1.15,
-  },
+  },*/
   {
     id: "ap-southeast-2",
     name: "Asia Pacific (Sydney)",
@@ -199,14 +199,14 @@ export const AWS_REGIONS = [
     zone: "Asia Pacific",
     pue: 1.15,
   },
-  {
+  /*{
     id: "ap-east-2",
     name: "Asia Pacific (Taipei)",
     zone: "Asia Pacific",
     pue: 1.15,
-  },
+  },*/
 
-  // --- China ---
+ /* // --- China ---
   {
     id: "cn-north-1",
     name: "China (Beijing)",
@@ -218,7 +218,7 @@ export const AWS_REGIONS = [
     name: "China (Ningxia)",
     zone: "China",
     pue: 1.15,
-  },
+  },*/
 ];
 
 // Helper: Fast Lookup Map (id -> object)
