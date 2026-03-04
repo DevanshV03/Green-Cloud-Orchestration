@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Cloud Routing Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 520px;
+            padding: 40px;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.15);
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 24px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            opacity: 0.6;
+            font-size: 16px;
+            margin-bottom: 32px;
+        }
+
+        .status {
+            font-size: 14px;
+            color: #4ade80;
+            min-height: 20px;
+            transition: all 0.3s;
+        }
+
+        .status.error {
+            color: #f87171;
+        }
+
+        .steps {
+            margin-top: 32px;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            font-size: 14px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .step.active {
+            opacity: 1;
+        }
+
+        .step.done {
+            opacity: 0.7;
+        }
+
+        .step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .step.active .step-icon {
+            border-color: #4ade80;
+            color: #4ade80;
+        }
+
+        .step.done .step-icon {
+            border-color: #4ade80;
+            background: #4ade80;
+            color: #0f172a;
+        }
+
+        .result-card {
+            margin-top: 24px;
+            background: rgba(74, 222, 128, 0.1);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            display: none;
+        }
+
+        .result-card.show {
+            display: block;
+        }
+
+        .result-region {
+            font-size: 22px;
+            font-weight: 700;
+            color: #4ade80;
+        }
+
+        .result-detail {
+            font-size: 13px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">🌍</div>
+        <h1>Green Cloud Orchestrator</h1>
+        <p class="subtitle">Finding the most sustainable server for you...</p>
+
+        <div class="spinner" id="spinner"></div>
+        <div class="status" id="status">Initializing...</div>
+
+        <div class="steps">
+            <div class="step" id="step1">
+                <div class="step-icon">1</div>
+                <span>Fetching your saved region preferences</span>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-icon">2</div>
+                <span>Measuring latency to each data center</span>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-icon">3</div>
+                <span>Fetching live carbon intensity data</span>
+            </div>
+            <div class="step" id="step4">
+                <div class="step-icon">4</div>
+                <span>Routing you to the best server</span>
+            </div>
+        </div>
+
+        <div class="result-card" id="result">
+            <div class="result-region" id="result-region"></div>
+            <div class="result-detail" id="result-detail"></div>
+        </div>
+    </div>
+
+    <!--
+        ============================================================
+        CONFIGURATION — UPDATE THESE VALUES BEFORE TESTING
+        ============================================================
+        1. Set GREEN_CLOUD_API to your Green Cloud backend URL
+        2. Set APP_URL to the application URL you saved in the dashboard
+        3. Set the EC2 IPs in LOCAL_SERVER_MAP (get these from Person A)
+        ============================================================
+    -->
+    <script src="https://green-cloud-orchestration.onrender.com/sdk/green-cloud.js"></script>
+    <script>
+        // ── CONFIGURATION ──────────────────────────────────────────
+        // The application URL you registered in the Green Cloud Dashboard
+        const APP_URL = "https://testapp.com";
+
+        // Fallback server map — used if serverMap wasn't saved in the Dashboard
+        // Replace these IPs with the real EC2 public IPs from Person A
+        const LOCAL_SERVER_MAP = {
+            "ca-central-1": "https://16.54.75.144",
+            "ap-south-1": "https://15.206.8.152",
+            "ap-southeast-1": "https://13.228.181.18",
+        };
+        // ── END CONFIGURATION ──────────────────────────────────────
+
+        const statusEl = document.getElementById('status');
+        const spinnerEl = document.getElementById('spinner');
+
+        function setStep(num) {
+            for (let i = 1; i <= 4; i++) {
+                const el = document.getElementById('step' + i);
+                el.className = 'step' + (i < num ? ' done' : i === num ? ' active' : '');
+                if (i < num) el.querySelector('.step-icon').textContent = '✓';
+            }
+        }
+
+        function showResult(region, detail) {
+            spinnerEl.style.display = 'none';
+            const card = document.getElementById('result');
+            card.className = 'result-card show';
+            document.getElementById('result-region').textContent = region;
+            document.getElementById('result-detail').textContent = detail;
+        }
+
+        // Override recommend to add step tracking
+        async function runRouting() {
+            try {
+                setStep(1);
+                statusEl.textContent = "Fetching your saved preferences...";
+
+                // Step 1: Get regions
+                const regionsUrl = GreenCloud._getApiBase
+                    ? GreenCloud._getApiBase()
+                    : document.querySelector('script[src*="green-cloud"]').src.replace(/\/sdk\/green-cloud\.js.*$/, '');
+
+                // We'll manually do the steps to show progress
+                const apiBase = "https://green-cloud-orchestration.onrender.com";
+                const regionsRes = await fetch(apiBase + "/api/recommend/regions?url=" + encodeURIComponent(APP_URL));
+
+                if (!regionsRes.ok) {
+                    const err = await regionsRes.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to fetch regions. Did you save preferences in the Dashboard?");
+                }
+
+                const regionsData = await regionsRes.json();
+                setStep(2);
+                statusEl.textContent = "Measuring latency to " + regionsData.regions.length + " regions...";
+
+                // Step 2: Measure latency
+                const latencies = await Promise.all(
+                    regionsData.regions.map(async (region) => {
+                        try {
+                            await fetch(region.pingUrl, { method: "HEAD", mode: "no-cors", cache: "no-store" });
+                            const start = performance.now();
+                            await fetch(region.pingUrl, { method: "HEAD", mode: "no-cors", cache: "no-store" });
+                            const end = performance.now();
+                            return { regionCode: region.regionCode, latency: Math.round(end - start) };
+                        } catch {
+                            return { regionCode: region.regionCode, latency: 0 };
+                        }
+                    })
+                );
+
+                setStep(3);
+                statusEl.textContent = "Analyzing carbon data & computing optimal route...";
+
+                // Step 3: Get recommendation
+                const decideRes = await fetch(apiBase + "/api/recommend/decide", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ applicationUrl: APP_URL, latencies }),
+                });
+
+                if (!decideRes.ok) throw new Error("Failed to get recommendation");
+
+                const result = await decideRes.json();
+                const rec = result.recommendedDataCenter;
+
+                setStep(4);
+                statusEl.textContent = "Routing to " + rec.regionName + "...";
+                statusEl.style.color = '#4ade80';
+
+                showResult(
+                    "🏆 " + rec.regionName,
+                    "Green Score: " + rec.greenScore + " | Carbon: " + rec.carbonIntensity + " gCO₂/kWh | Latency: " + rec.estimatedLatency + "ms | Savings: " + result.carbonSavings + "%"
+                );
+
+                // Determine redirect target
+                const targetUrl = result.targetServerUrl
+                    || LOCAL_SERVER_MAP[rec.id]
+                    || null;
+
+                if (targetUrl) {
+                    statusEl.textContent = "Redirecting to " + rec.regionName + " in 3 seconds...";
+
+                    // 3 second delay so user can see the result before redirect
+                    setTimeout(() => {
+                        window.location.href = targetUrl;
+                    }, 3000);
+                } else {
+                    statusEl.textContent = "No server URL configured for " + rec.id + ". Add it in the Dashboard or LOCAL_SERVER_MAP.";
+                    statusEl.style.color = '#fbbf24';
+                }
+
+            } catch (err) {
+                statusEl.textContent = "Error: " + err.message;
+                statusEl.className = 'status error';
+                spinnerEl.style.display = 'none';
+                console.error(err);
+            }
+        }
+
+        // Start routing
+        runRouting();
+    </script>
+</body>
+
+</html>
