@@ -1,4 +1,5 @@
-import { Cloud, Leaf } from "lucide-react";
+import { Cloud, Leaf, Code2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 function DashboardHeader() {
   return (
@@ -17,9 +18,17 @@ function DashboardHeader() {
         Green Cloud <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-500">Orchestrator</span>
       </h1>
 
-      <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
+      <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed mb-5">
         Optimize your cloud infrastructure for <span className="text-gray-900 font-medium">lowest carbon impact</span> and <span className="text-gray-900 font-medium">highest performance</span>.
       </p>
+
+      <Link
+        to="/docs"
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all shadow-md hover:shadow-lg"
+      >
+        <Code2 className="w-4 h-4" />
+        SDK Docs & Integration Guide
+      </Link>
     </header>
   );
 }

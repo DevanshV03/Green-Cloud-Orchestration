@@ -147,12 +147,12 @@ export const AWS_REGIONS = [
     zone: "Asia Pacific",
     pue: 1.15,
   },
-  /*{
+  {
     id: "ap-southeast-1",
     name: "Asia Pacific (Singapore)",
     zone: "Asia Pacific",
     pue: 1.15,
-  },*/
+  },
   {
     id: "ap-southeast-2",
     name: "Asia Pacific (Sydney)",

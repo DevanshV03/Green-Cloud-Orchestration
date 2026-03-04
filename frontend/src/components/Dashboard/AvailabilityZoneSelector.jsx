@@ -12,9 +12,9 @@ function AvailabilityZoneSelector({ value, onChange, disabled, provider }) {
       regionList = GCP_REGIONS;
     } else if (provider === "AWS") {
       regionList = AWS_REGIONS;
-    } else if (!provider) {
-      // No provider selected - show all regions
-      regionList = [...AWS_REGIONS, ...GCP_REGIONS];
+    } else {
+      // No provider selected — don't show any regions
+      return [];
     }
 
     return regionList.map(region => ({

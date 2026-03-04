@@ -34,3 +34,43 @@ export async function getRouteDecision(taskType) {
   });
   return res.json();
 }
+
+/**
+ * Saves user preferences (task type, provider, zones, app URL) to MongoDB.
+ * Used by the Dashboard "Save Preferences" button.
+ */
+export async function savePreferences({ applicationUrl, taskType, provider, selectedZones, serverMap }) {
+  const response = await axios.post(`${API_BASE}/api/preferences`, {
+    applicationUrl,
+    taskType,
+    provider,
+    selectedZones,
+    serverMap,
+  });
+  return response.data;
+}
+
+/**
+ * ML-powered emission prediction.
+ * Calls the backend Random Forest model to predict CO₂ emissions.
+ */
+export async function predictEmissionML({
+  carbonIntensity,
+  renewablePercentage,
+  pue,
+  workload = 1,
+}) {
+  try {
+    const response = await axios.post(`${API_BASE}/api/ml/predict-emission`, {
+      carbon_intensity: carbonIntensity,
+      renewable_percentage: renewablePercentage,
+      pue,
+      workload,
+    });
+
+    return response.data.predictedEmission;
+  } catch (error) {
+    console.error("ML Prediction Error:", error.message);
+    return null;
+  }
+}

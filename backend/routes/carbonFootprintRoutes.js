@@ -6,7 +6,7 @@ import axios from 'axios';
 const router = express.Router();
 
 // Mapping from cloud region codes to Electricity Maps zone codes
-const REGION_TO_ZONE = {
+export const REGION_TO_ZONE = {
     // AWS Regions
     'us-east-1': 'US-CAR-CPLE',  // Virginia
     'us-east-2': 'US-MIDA-PJM',  // Ohio
@@ -56,8 +56,15 @@ const REGION_TO_ZONE = {
     'me-west1': 'IL',                // Tel Aviv
 };
 
-router.post('/carbon-footprint', async (req, res) => {
-    const { regionValue, provider = 'aws' } = req.body;
+/**
+ * Reusable function to fetch carbon intensity and renewable percentage for a region.
+ * Used by both the /carbon-footprint route and the recommendation API.
+ * 
+ * @param {string} regionValue - Cloud region code (e.g. 'us-east-1')
+ * @param {string} provider - Cloud provider ('aws' or 'gcp')
+ * @returns {Promise<{regionCode, carbonIntensity, renewablepercent, fallback?}>}
+ */
+export async function fetchCarbonData(regionValue, provider = 'aws') {
     const datetime = new Date().toISOString().slice(0, 16).replace('T', ' ');
     const dataCenterProvider = provider.toLowerCase();
 
@@ -85,11 +92,11 @@ router.post('/carbon-footprint', async (req, res) => {
             }
         });
 
-        res.status(200).json({
+        return {
             regionCode: regionValue,
             carbonIntensity: response.data.carbonIntensity,
             renewablepercent: renewableresponse.data.value
-        });
+        };
 
     } catch (datacenterError) {
         console.log(`Datacenter API failed for ${regionValue}, trying zone fallback...`);
@@ -99,10 +106,7 @@ router.post('/carbon-footprint', async (req, res) => {
 
         if (!zoneCode) {
             console.error(`No zone mapping found for region: ${regionValue}`);
-            return res.status(400).json({
-                error: 'Region not supported',
-                regionCode: regionValue
-            });
+            throw new Error(`Region not supported: ${regionValue}`);
         }
 
         try {
@@ -123,20 +127,38 @@ router.post('/carbon-footprint', async (req, res) => {
                 console.log(`Renewable data not available for zone ${zoneCode}`);
             }
 
-            res.status(200).json({
+            return {
                 regionCode: regionValue,
                 carbonIntensity: zoneResponse.data.carbonIntensity,
                 renewablepercent: renewablePercent,
-                fallback: true // Flag to indicate fallback was used
-            });
+                fallback: true
+            };
 
         } catch (zoneError) {
             console.error(`Zone fallback also failed for ${regionValue}:`, zoneError.message);
-            res.status(500).json({
-                error: 'Failed to fetch carbon intensity',
+            throw new Error(`Failed to fetch carbon intensity for ${regionValue}`);
+        }
+    }
+}
+
+// Route handler — thin wrapper around fetchCarbonData()
+router.post('/carbon-footprint', async (req, res) => {
+    const { regionValue, provider = 'aws' } = req.body;
+
+    try {
+        const data = await fetchCarbonData(regionValue, provider);
+        res.status(200).json(data);
+    } catch (error) {
+        if (error.message.includes('not supported')) {
+            return res.status(400).json({
+                error: 'Region not supported',
                 regionCode: regionValue
             });
         }
+        res.status(500).json({
+            error: 'Failed to fetch carbon intensity',
+            regionCode: regionValue
+        });
     }
 });
 

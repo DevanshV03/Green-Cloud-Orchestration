@@ -17,7 +17,7 @@ import ContextWidgets from "../components/ContextWidgets";
 
 
 // Services & Data Logic
-import { fetchCarbonIntensity } from "../services/api";
+import { fetchCarbonIntensity, savePreferences } from "../services/api";
 import { measureLatency } from "../services/latencyService";
 import { getPingUrl } from "../utils/urlGenerator";
 
@@ -34,6 +34,9 @@ function Dashboard() {
   const [selectedZone, setSelectedZone] = useState([]);
   const [applicationUrl, setApplicationUrl] = useState("");
   const [manualSelection, setManualSelection] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // { type: 'success'|'error', message: '' }
+  const [serverMap, setServerMap] = useState({}); // { regionCode: serverUrl }
 
   const [regionData, setRegionData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -110,6 +113,30 @@ function Dashboard() {
 
   const optimalRegion = selectOptimalRegion(filteredRegions, taskType);
   const activeSelection = manualSelection || optimalRegion;
+
+  // --- SAVE PREFERENCES HANDLER ---
+  const canSave = applicationUrl && selectedProvider && selectedZone.length > 0;
+
+  const handleSavePreferences = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      await savePreferences({
+        applicationUrl,
+        taskType,
+        provider: selectedProvider,
+        selectedZones: selectedZone,
+        serverMap,
+      });
+      setSaveStatus({ type: 'success', message: 'Preferences saved! Your app can now use the recommendation API.' });
+    } catch (error) {
+      setSaveStatus({ type: 'error', message: 'Failed to save preferences. Please try again.' });
+      console.error('Save error:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
   const carbonSavings = calculateCarbonSavings(activeSelection, filteredRegions);
 
   // --- UI RENDER ---
@@ -155,6 +182,55 @@ function Dashboard() {
             value={applicationUrl}
             onChange={setApplicationUrl}
           />
+        </div>
+
+        {/* Server URL Mapping — for API routing */}
+        {selectedZone.length > 0 && (
+          <div className="bg-gray-50 rounded-xl border border-gray-200 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-700">
+              🔗 Map Your Servers <span className="text-sm font-normal text-gray-400">(Optional — for API routing)</span>
+            </h3>
+            <p className="text-sm text-gray-500">
+              Enter the URL of your server deployed in each region. This enables the SDK to redirect users to the correct server.
+            </p>
+            <div className="grid gap-3">
+              {selectedZone.map(zone => (
+                <div key={zone} className="flex items-center gap-3">
+                  <span className="text-sm font-mono bg-white px-3 py-2 rounded-lg border border-gray-200 min-w-[160px] text-gray-700">
+                    {zone}
+                  </span>
+                  <input
+                    type="url"
+                    placeholder={`https://your-${zone}-server.com`}
+                    value={serverMap[zone] || ''}
+                    onChange={(e) => setServerMap(prev => ({ ...prev, [zone]: e.target.value }))}
+                    className="flex-1 h-10 px-4 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Save Preferences Button */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <button
+            onClick={handleSavePreferences}
+            disabled={!canSave || saving}
+            className={`px-6 py-3 rounded-xl font-semibold text-white shadow-md transition-all duration-200 ${canSave && !saving
+              ? 'bg-green-600 hover:bg-green-700 hover:shadow-lg cursor-pointer'
+              : 'bg-gray-300 cursor-not-allowed'
+              }`}
+          >
+            {saving ? 'Saving...' : '💾 Save Preferences for API'}
+          </button>
+
+          {saveStatus && (
+            <span className={`text-sm font-medium ${saveStatus.type === 'success' ? 'text-green-600' : 'text-red-600'
+              }`}>
+              {saveStatus.type === 'success' ? '✅' : '❌'} {saveStatus.message}
+            </span>
+          )}
         </div>
 
         {/* Content Area */}
